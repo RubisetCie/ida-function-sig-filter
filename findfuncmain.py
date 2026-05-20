@@ -1,6 +1,6 @@
 import sys
 
-from PyQt5.QtWidgets import QApplication, QMessageBox, QVBoxLayout
+from PySide6.QtWidgets import QApplication, QMessageBox, QVBoxLayout
 
 from findfunc import findfunc_gui
 
@@ -23,11 +23,11 @@ if inida:
 
 __AUTHOR__ = 'feber'
 
-PLUGIN_NAME = "FindFunc (x86/x64)"
+PLUGIN_NAME = "Signature Filter"
 PLUGIN_HOTKEY = 'ctrl+alt+f'
 VERSION = '1.5'
 WINDOWTITLE = f'{PLUGIN_NAME} {VERSION}'
-INFOSTR = f'For usage see: ' '<a href="https://github.com/FelixBer/FindFunc">https://github.com/FelixBer/FindFunc</a>'
+INFOSTR = f'For usage see: ' '<a href="https://github.com/RubisetCie/ida-function-sig-filter">https://github.com/RubisetCie/ida-function-sig-filter</a>'
 
 # this is executed when running a script rather than plugin
 if __name__ == "__main__":
@@ -55,7 +55,7 @@ class FindFunc(idaapi.plugin_t):
     """
     flags = 0  # idaapi.PLUGIN_PROC  # | idaapi.PLUGIN_FIX #| idaapi.PLUGIN_HIDE
     comment = "Function Finder and Advanced copying of instruction bytes"
-    help = f"Edit->Plugin->FindFunc or {PLUGIN_HOTKEY}. Also: disasm->rightclick->copy all|opcode|noimm"
+    help = f"Edit->Plugin->Find Function or {PLUGIN_HOTKEY}. Also: disasm->rightclick->copy all|opcode|noimm"
     wanted_name = PLUGIN_NAME
     wanted_hotkey = PLUGIN_HOTKEY
 
@@ -75,52 +75,52 @@ class FindFunc(idaapi.plugin_t):
         # see advanced_copy for details
         action_desc = idaapi.action_desc_t(
             self.ACTION_COPY_BYTES,
-            "copy bytes",
+            "Copy bytes",
             ACActionHandler(copy_all_bytes),
             "ctrl+alt+b",  # hotkey
-            "copy all selected bytes as hex",
+            "Copy all selected bytes as hex",
             31
         )
         assert idaapi.register_action(action_desc), "Action registration failed"
         action_desc = idaapi.action_desc_t(
             self.ACTION_COPY_OPC,
-            "copy opcodes",
+            "Copy opcodes",
             ACActionHandler(copy_only_opcodes),
             "ctrl+alt+o",  # hotkey
-            "copy selected opcodes as hex, mask out non-opcode bytes",
+            "Copy selected opcodes as hex, mask out non-opcode bytes",
             31
         )
         assert idaapi.register_action(action_desc), "Action registration failed"
         action_desc = idaapi.action_desc_t(
             self.ACTION_COPY_OPC_IMM,
-            "copy opcodes and immediates",
+            "Copy opcodes and immediates",
             ACActionHandler(copy_opcodes_and_imm),
             "ctrl+alt+o+i",  # hotkey
-            "copy instruction bytes, mask everything but opcodes + immediates",
+            "Copy instruction bytes, mask everything but opcodes + immediates",
             31
         )
         assert idaapi.register_action(action_desc), "Action registration failed"
         action_desc = idaapi.action_desc_t(
             self.ACTION_COPY_NO_IMM,
-            "copy without immediates",
+            "Copy without immediates",
             ACActionHandler(copy_bytes_no_imm),
             "ctrl+alt+i",  # hotkey
-            "copy instruction bytes, mask out all immediates",
+            "Copy instruction bytes, mask out all immediates",
             31
         )
         assert idaapi.register_action(action_desc), "Action registration failed"
         action_desc = idaapi.action_desc_t(
             self.ACTION_COPY_DISASM,
-            "copy disasm",
+            "Copy disasm",
             ACActionHandler(copy_only_disasm),
             "ctrl+alt+d",  # hotkey
-            "copy disasm lines only",
+            "Copy disasm lines only",
             31
         )
         assert idaapi.register_action(action_desc), "Action registration failed"
         action_desc = idaapi.action_desc_t(
             self.ACTION_FFOPEN,
-            "FindFunc",
+            "Find functions",
             ACActionHandler(open_form),
             "ctrl+alt+f",  # hotkey
             "",
@@ -155,7 +155,7 @@ class FindFunc(idaapi.plugin_t):
         global cursession
         global lastsavedsession
         if cursession and cursession != lastsavedsession:
-            reply = QMessageBox.question(None, "Save Session", "Your FindFunc session has not been saved. Save now?",
+            reply = QMessageBox.question(None, "Save Session", "Your session has not been saved. Save now?",
                                              QMessageBox.Yes | QMessageBox.No)
             if reply == QMessageBox.Yes:
                 findfunc_gui.TabWid.save_as_session(cursession)

@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>FindFunc</string>
+   <string>Filter Signatures</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
@@ -43,7 +43,7 @@
         </sizepolicy>
        </property>
        <property name="text">
-        <string>load session</string>
+        <string>Load session</string>
        </property>
       </widget>
      </item>
@@ -56,10 +56,23 @@
         </sizepolicy>
        </property>
        <property name="text">
-        <string>save session</string>
+        <string>Save session</string>
        </property>
       </widget>
      </item>
+     <item>
+     <widget class="QPushButton" name="btnexportcsv">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
+      <property name="text">
+       <string>Export CSV</string>
+      </property>
+     </widget>
+    </item>
      <item>
       <widget class="QLabel" name="linklabel">
        <property name="text">

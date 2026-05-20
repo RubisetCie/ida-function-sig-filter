@@ -1,7 +1,7 @@
-from PyQt5 import QtCore, QtGui
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QColor
-from PyQt5.QtWidgets import QMessageBox
+from PySide6 import QtCore, QtGui
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor
+from PySide6.QtWidgets import QMessageBox
 
 from findfunc.backbone import *
 from typing import List

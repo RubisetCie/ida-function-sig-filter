@@ -10,22 +10,14 @@ try:
 except:
     inida = False
 
-from PyQt5.Qt import QApplication
-
-### config
+from PySide6.QtWidgets import QApplication
 
 # print the result of the copy operation to IDA log
 logresult = True
 
 
-### helper
-
-
 def copy_to_clip(data):
     QApplication.clipboard().setText(data)
-
-
-### copy all
 
 
 def copy_all_bytes():
@@ -43,10 +35,7 @@ def copy_all_bytes():
     data = ' '.join([data[i:i + 2] for i in range(0, len(data), 2)])
     copy_to_clip(data)
     if logresult:
-        print("copy_all_bytes:     ", data)
-
-
-### copy no-imm
+        print("Copied: ", data)
 
 
 def int_as_bytes(integer, size):
@@ -59,19 +48,19 @@ def int_as_bytes(integer, size):
 
 
 #unused
-def is_neg(addr):
-    try:
-        # since IDA 9
-        is64 = ida_ida.idainfo_is_64bit()
-        is32 = ida_ida.idainfo_is_32bit()
-    except:
-        info = idaapi.get_inf_structure()
-        is64 = info.is_64bit()
-        is32 = info.is_32bit()
-    if is64:
-        return addr & 0x8000000000000000
-    else:
-        return addr & 0x80000000
+#def is_neg(addr):
+#    try:
+#        # since IDA 9
+#        is64 = ida_ida.idainfo_is_64bit()
+#        is32 = ida_ida.idainfo_is_32bit()
+#    except:
+#        info = idaapi.get_inf_structure()
+#        is64 = info.is_64bit()
+#        is32 = info.is_32bit()
+#    if is64:
+#        return addr & 0x8000000000000000
+#    else:
+#        return addr & 0x80000000
 
 
 masks = [(8, 0), (4, 0xffffffff00000000), (2, 0xffffffffffff0000), (1, 0xffffffffffffff00)]
@@ -162,12 +151,9 @@ def copy_bytes_no_imm():
         processed += ins.size
         result += " " + get_bytes_without_imm(ins)
     if logresult:
-        print("copy_bytes_no_imm: ", result)
+        print("Copied: ", result)
     copy_to_clip(result)
 
-
-###
-### copy opcodes
 
 class bytegetter:
     """
@@ -287,12 +273,8 @@ def copy_only_opcodes():
         processed += ins.size
         result += " " + get_only_opcodes(ins)
     if logresult:
-        print("copy_only_opcodes: ", result)
+        print("Copied: ", result)
     copy_to_clip(result)
-
-
-
-### copy opcodes + imm (mask regs + size)
 
 
 def copy_opcodes_and_imm():
@@ -332,12 +314,9 @@ def copy_opcodes_and_imm():
 
     result = result.strip()
     if logresult:
-        print("copy_opcodes_and_imm: ", result)
+        print("Copied: ", result)
     copy_to_clip(result)
 
-
-
-### copy disasm
 
 def copy_only_disasm():
     """
@@ -360,10 +339,5 @@ def copy_only_disasm():
         if ins:
             result += ins + "\n"
     if logresult:
-        print("copy_only_disasm: ", result)
+        print("Copied: ", result)
     copy_to_clip(result)
-
-###
-
-# https://wiki.osdev.org/X86-64_Instruction_Encoding#VEX.2FXOP_opcodes
-# https://github.com/capstone-engine/capstone/blob/master/arch/X86/X86DisassemblerDecoder.c#L749

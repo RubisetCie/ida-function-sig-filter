@@ -6,11 +6,12 @@ import cProfile
 import io
 import copy
 import traceback
+import csv
 
-from PyQt5 import QtWidgets
-from PyQt5.QtWidgets import QWidget, QMessageBox, QLineEdit, QApplication, QTabBar, QMenu, QFileDialog
-from PyQt5.QtCore import Qt, QEvent
-from PyQt5.QtGui import QCursor, QKeySequence
+from PySide6 import QtWidgets
+from PySide6.QtWidgets import QWidget, QMessageBox, QLineEdit, QApplication, QTabBar, QMenu, QFileDialog
+from PySide6.QtCore import Qt, QEvent
+from PySide6.QtGui import QAction, QCursor, QKeySequence
 
 from findfunc.findfuncdialog import Ui_FindFunc
 from findfunc.fftabs import Ui_fftabs
@@ -76,36 +77,36 @@ class FindFuncTab(QWidget):
         self.ui.tableresults.customContextMenuRequested.connect(self.reqresultmenu)
         # main menu
         self.menu = QMenu('mainmenu', self.ui.tableview)
-        self.menu.addAction("add imm", self.addimmrule)
-        self.menu.addAction("add function size", self.addfsizerule)
-        self.menu.addAction("add name ref", self.addnamerule)
-        self.menu.addAction("add string ref", self.addstrrule)
-        self.menu.addAction("add byte pattern", self.addbytepatternrule)
-        self.menu.addAction("add code pattern", self.addcoderule)
+        self.menu.addAction("Add immediate", self.addimmrule)
+        self.menu.addAction("Add function size", self.addfsizerule)
+        self.menu.addAction("Add name rule", self.addnamerule)
+        self.menu.addAction("Add string rule", self.addstrrule)
+        self.menu.addAction("Add byte pattern", self.addbytepatternrule)
+        self.menu.addAction("Add code pattern", self.addcoderule)
         self.menu.addSeparator()
-        act = self.menu.addAction("delete selection", self.delselrules, "del")
+        act = self.menu.addAction("Delete selection", self.delselrules, "del")
         self.ui.tableview.addAction(act)
-        act = self.menu.addAction("copy", self.copyselrules, "ctrl+c")
+        act = self.menu.addAction("Copy", self.copyselrules, "ctrl+c")
         self.ui.tableview.addAction(act)
-        act = self.menu.addAction("paste", self.pasteselrules, "ctrl+v")
+        act = self.menu.addAction("Paste", self.pasteselrules, "ctrl+v")
         self.ui.tableview.addAction(act)
         self.menu.addSeparator()
-        act = self.menu.addAction("save selected rules to file", self.saveselrules, "ctrl+s")
+        act = self.menu.addAction("Save selected rules to file", self.saveselrules, "ctrl+s")
         self.ui.tableview.addAction(act)
-        act = self.menu.addAction("add rules from file", self.loadselrules, "ctrl+l")
+        act = self.menu.addAction("Add rules from file", self.loadselrules, "ctrl+l")
         self.ui.tableview.addAction(act)
         # result menu
         self.resmenu = QMenu('resmenu', self.ui.tableresults)
-        act = self.resmenu.addAction("copy addresses", self.copyresults, "ctrl+c")
+        act = self.resmenu.addAction("Copy addresses", self.copyresults, "ctrl+c")
         self.ui.tableresults.addAction(act)
-        self.resmenu.addAction("clear", self.clearresults)
+        self.resmenu.addAction("Clear", self.clearresults)
         # menu end
         # add shortcut for search and refine
-        act = QtWidgets.QAction("find", self)
+        act = QAction("Find", self)
         act.setShortcut("ctrl+f")
         act.triggered.connect(self.dosearchclicked)
         self.ui.tableview.addAction(act)
-        act = QtWidgets.QAction("refine", self)
+        act = QAction("Refine", self)
         act.setShortcut("ctrl+r")
         act.triggered.connect(self.dorefineclicked)
         self.ui.tableview.addAction(act)
@@ -131,7 +132,6 @@ class FindFuncTab(QWidget):
         """
         if e.type() == QEvent.ShortcutOverride:
             if o is self.ui.tableview:
-                # print(e.modifiers(), e.key(), e.text(), str(e.type()), e.matches(QKeySequence.Copy))
                 e.accept()
                 for a in self.ui.tableview.actions():
                     modifiers = e.modifiers().value if hasattr(e.modifiers(), 'value') else int(e.modifiers())
@@ -403,7 +403,6 @@ class FindFuncTab(QWidget):
             stream = io.StringIO()
             ps = pstats.Stats(profiler, stream=stream).sort_stats('tottime')
             ps.print_stats()
-            print(stream.getvalue())
         if self.matcher.wascancelled:
             self.matcher.wascancelled = False
             QMessageBox.warning(self, "Canceled", "Search was canceled.")
@@ -438,17 +437,50 @@ class TabWid(QWidget):
         self.ui.tabWidget.tabBar().tabCloseRequested.connect(self.closeTabReq)
         self.ui.tabWidget.tabBar().tabMoved.connect(self.tabmoved)
         self.ui.btnloadsess.clicked.connect(self.loadsessionclicked)
-        self.ui.btnloadsess.setToolTip("load tabs from file and append to existing")
+        self.ui.btnloadsess.setToolTip("Load tabs from file and append to existing")
         self.ui.btnloadsess.setShortcut("ctrl+shift+l")
         self.ui.btnsavesess.clicked.connect(self.savesessionclicked)
-        self.ui.btnsavesess.setToolTip("save all tabs to file")
+        self.ui.btnsavesess.setToolTip("Save all tabs to file")
         self.ui.btnsavesess.setShortcut("ctrl+shift+s")
+        self.ui.btnexportcsv.clicked.connect(self.exportcsvclicked)
+        self.ui.btnexportcsv.setToolTip("Export results of current tab to csv")
         self.clearAll()
         self.addNewTab()
         for r in [RuleImmediate(9), RuleCode("xor eax,r32"), RuleNameRef("mem*")]:
             self.ui.tabWidget.widget(0).model.add_item(r)
         self.lastsessionsaved = self.session_to_text()  # last saved session data, used for checking on close
-        print("init with config:" + str(self.ui.tabWidget.widget(0).matcher.info))
+
+    def exportcsvclicked(self):
+        """Export current tab's result table to CSV (comma-separated)."""
+        tab = self.ui.tabWidget.currentWidget()
+        if not tab or not hasattr(tab, "resultmodel"):
+            QMessageBox.warning(self, "Nothing", "No active results tab selected")
+            return
+        results = getattr(tab.resultmodel, "mydata", None)
+        if not results:
+            QMessageBox.warning(self, "Nothing", "No results to export")
+            return
+
+        path, _ = QFileDialog.getSaveFileName(self, 'Export Results to CSV', "findfunc_results.csv",
+                                              "CSV (*.csv) ;; Any (*.*)")
+        if not path:
+            return
+
+        try:
+            with open(path, 'w', newline='', encoding='utf-8') as handle:
+                writer = csv.writer(handle, delimiter=',')
+                writer.writerow(["VA", "Size", "Chunks", "Name", "LastMatch"])
+                for r in results:
+                    writer.writerow([
+                        hex(r.va) if r.va is not None else "",
+                        r.size if r.size is not None else "",
+                        r.chunks if r.chunks is not None else "",
+                        r.name if r.name is not None else "",
+                        hex(r.lastmatch) if getattr(r, "lastmatch", None) is not None else "",
+                    ])
+            QMessageBox.information(self, "Success", "Exported successfully to " + path)
+        except Exception as ex:
+            QMessageBox.warning(self, "Error exporting file", str(ex))
 
     def closeEvent(self, event):
         # when running as script, we need to handle it here
@@ -549,15 +581,15 @@ class TabWid(QWidget):
             menu = QMenu("tabmenu", self)
 
             cmd = lambda self, func=self.cloneTab: func(index)
-            act = QtWidgets.QAction("clone", self)
+            act = QAction("clone", self)
             act.triggered.connect(cmd)
             menu.addAction(act)
             cmd = lambda self, func=self.tabDoubleClicked: func(index)
-            act = QtWidgets.QAction("rename", self)
+            act = QAction("rename", self)
             act.triggered.connect(cmd)
             menu.addAction(act)
             cmd = lambda self, func=self.closeTabReq: func(index)
-            act = QtWidgets.QAction("close", self)
+            act = QAction("close", self)
             act.triggered.connect(cmd)
             menu.addAction(act)
 
@@ -588,7 +620,7 @@ class TabWid(QWidget):
             if not self.ui.tabWidget.isTabEnabled(t):
                 self.ui.tabWidget.removeTab(t)
                 break
-        newtab = self.ui.tabWidget.addTab(FindFuncTab(), "new tab")
+        newtab = self.ui.tabWidget.addTab(FindFuncTab(), "New tab")
         self.ui.tabWidget.setTabEnabled(newtab, False)
         self.ui.tabWidget.tabBar().setTabButton(newtab, QTabBar.RightSide, None)
 

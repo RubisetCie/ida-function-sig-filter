@@ -1,10 +1,11 @@
 import copy
+import time
 from typing import Iterable
 
 from findfunc.backbone import *
 
 try:
-    from PyQt5.QtWidgets import QApplication
+    from PySide6.QtWidgets import QApplication
 except ImportError:
     QApplication = None
 
@@ -132,7 +133,6 @@ class Config:
     or image-range
     """
     def __init__(self):
-        self.debug = False
         self.profile = False
         self.warnedfar = False
         if not inida:
@@ -161,7 +161,7 @@ class Config:
         elif is32:
             self.ptrsize = 4
         else:
-            assert "processor must be x64 or x86"
+            assert "Processor must be x64 or x86"
 
     def __str__(self):
         return f"config: [{hex(self.startva)} - {hex(self.endva)}] @{self.ptrsize} ({str(self.strtypes)})"
@@ -266,6 +266,44 @@ class MatcherIda:
         self.info = Config()
         self.idastrings = None
         self.wascancelled = False
+        self._progress_last_t = 0.0
+        self._progress_last_msg = ""
+
+    def _progress(self, stage: str, current: int | None = None, total: int | None = None, extra: str | None = None,
+                  force: bool = False):
+        """Best-effort progress reporting in IDA's wait box.
+
+        Uses throttling to avoid slowing down matching.
+        Safe when running outside IDA.
+        """
+        if not inida:
+            return
+        if not hasattr(idaapi, "replace_wait_box"):
+            return
+        msg = f"FindFunc: {stage}"
+        if current is not None:
+            if total is not None and total > 0:
+                msg += f" ({current}/{total})"
+            else:
+                msg += f" ({current}/?)"
+        if extra:
+            msg += f"\n{extra}"
+
+        now = time.perf_counter()
+        if not force:
+            # Throttle UI updates; too frequent replace_wait_box calls slow down matching.
+            if msg == self._progress_last_msg:
+                return
+            if (now - self._progress_last_t) < 0.2:
+                return
+
+        try:
+            idaapi.replace_wait_box(msg)
+            self._progress_last_t = now
+            self._progress_last_msg = msg
+        except Exception:
+            # Never let progress reporting break matching.
+            return
 
     @staticmethod
     def _bin_search_compat(start_ea, end_ea, pattern, flags):
@@ -351,9 +389,13 @@ class MatcherIda:
     # generated initial matches.
     # To keep memoryp ressure low, ideally this all works as a geneartor-pipeline
 
-    @staticmethod
-    def refine_match_string(funcs: Iterable[Func], rules: List[RuleStrRef]):
+    def refine_match_string(self, funcs: Iterable[Func], rules: List[RuleStrRef]):
+        checked = 0
+        kept = 0
         for func in funcs:
+            checked += 1
+            if (checked % 50) == 0:
+                self._progress("Refining string refs", checked, extra=f"kept {kept}")
             for r in rules:
                 for ref in r.refs:
                     isinfunc = func.contains_adr(ref)
@@ -368,21 +410,31 @@ class MatcherIda:
                     func = None
                     break
             if func:
+                kept += 1
                 yield func
 
-    @staticmethod
-    def refine_match_fsize(funcs: Iterable[Func], rules: List[RuleFuncSize]):
+    def refine_match_fsize(self, funcs: Iterable[Func], rules: List[RuleFuncSize]):
+        checked = 0
+        kept = 0
         for fnc in funcs:
+            checked += 1
+            if (checked % 100) == 0:
+                self._progress("Refining function size", checked, extra=f"kept {kept}")
             for rule in rules:
                 isinfunc = rule.checksize(fnc.size)
                 if isinfunc == rule.inverted:
                     break  # one rule mismatch is enough
             else:
+                kept += 1
                 yield fnc
 
-    @staticmethod
-    def refine_match_name(funcs: Iterable[Func], rules: List[RuleNameRef]):
+    def refine_match_name(self, funcs: Iterable[Func], rules: List[RuleNameRef]):
+        checked = 0
+        kept = 0
         for func in funcs:
+            checked += 1
+            if (checked % 50) == 0:
+                self._progress("Refining name refs", checked, extra=f"kept {kept}")
             for r in rules:
                 for ref in r.refs:
                     isinfunc = func.contains_adr(ref)
@@ -397,12 +449,18 @@ class MatcherIda:
                     func = None
                     break
             if func:
+                kept += 1
                 yield func
 
     def refine_match_bytes(self, funcs: Iterable[Func], rules: List[RuleBytePattern]):
+        checked = 0
+        kept = 0
         for func in funcs:
+            checked += 1
             if self.iscancelled():
                 return
+            if (checked % 25) == 0:
+                self._progress("Scanning byte patterns", checked, extra=f"kept {kept}")
             for r in rules:
                 for chunk in func.get_as_chunks():
                     hit = self._bin_search_compat(chunk[0], chunk[1], r.patterncompiled, idaapi.BIN_SEARCH_FORWARD)
@@ -418,6 +476,7 @@ class MatcherIda:
                     func = None
                     break
             if func:
+                kept += 1
                 yield func
 
     # CodeRule matching is the most complicated matching.
@@ -510,12 +569,8 @@ class MatcherIda:
         if not fnmatch.fnmatch(idains.mmn, curins.mmn) and curins.mmn != "any":  # match mmn
             r.clearcurrent()
             return
-        if self.info.debug:
-            print(f"---\nprep: {idains}    ==    {curins}")
         passed = True
         for opx, opy in zip(idains.ops, curins.ops):  # match operands
-            if self.info.debug:
-                print(f"{opx}    ==    {opy}    ->  {self._check_op_eq(opx, opy)}")
             if not self._check_op_eq(opx, opy):
                 r.clearcurrent()
                 passed = False
@@ -608,11 +663,8 @@ class MatcherIda:
             if op.type in (idc.o_far, idc.o_near):
                 if not self.info.warnedfar:
                     self.info.warnedfar = True
-                    print("near and far operands not supported")
+                    print("Near and far operands not supported")
                 continue
-            # if self.info.debug:
-            #     print("is_op", ida_is_op_16(ins), ida_is_op_32(ins), ida_is_op_64(ins))
-            #     print("is_add", ida_is_ad_16(ins), ida_is_ad_32(ins), ida_is_ad_64(ins))
             adrsizeoverrideprefix = ida_get_insn_admode(idains)
             o = self._ida_op_t_to_wcop(op, adrsizeoverrideprefix)
             myins.ops.append(o)
@@ -627,9 +679,14 @@ class MatcherIda:
         :param rimm: imm rules
         :return: yield functions satisfying all rules
         """
+        checked = 0
+        kept = 0
         for func in funcs:
+            checked += 1
             if self.iscancelled():
                 return
+            if (checked % 10) == 0:
+                self._progress("Scanning code/immediates", checked, extra=f"kept {kept}")
             disasm = list(func.disasm())
             for r in rimm:
                 for ins in disasm:
@@ -648,10 +705,9 @@ class MatcherIda:
                 continue
 
             if not rcode:
+                kept += 1
                 yield func  # no code rules and passed imm check
                 continue
-            if self.info.debug:
-                print(f"checking func... at {hex(func.va)} with inscount {len(disasm)}")
             # reset rules
             for r in rcode:
                 r.clearcurrent()
@@ -672,6 +728,7 @@ class MatcherIda:
                 if r.is_satisfied() == r.inverted:
                     break  # one mismatching rule is enough
             else:
+                kept += 1
                 yield func
             # reset rules
             for r in rcode:
@@ -707,6 +764,9 @@ class MatcherIda:
         # rc.set_data("mov     cl, [eax+ebx*4+9]")
         # print(rc.instr[0])
         self.wascancelled = False
+        self._progress_last_t = 0.0
+        self._progress_last_msg = ""
+        self._progress("Starting", force=True)
         activerules = copy.deepcopy([x for x in rules if x.enabled])
         if not activerules:
             return []
@@ -731,28 +791,38 @@ class MatcherIda:
 
         # cheap
         if pos_str_rules or neg_str_rules:
+            self._progress("Preprocessing strings", force=True)
             if not self.idastrings:
                 self.idastrings = idautils.Strings(False)
                 self.idastrings.setup(self.info.strtypes)
             # print(f"{hex(i.ea)}: len {i.length}, type {i.strtype}, {str(i)}")
+            s_checked = 0
             for string in self.idastrings:
+                s_checked += 1
+                if (s_checked % 500) == 0:
+                    self._progress("Preprocessing strings", s_checked)
                 strval = str(string)
                 for rule in pos_str_rules + neg_str_rules:
                     if rule.matches(strval):
                         rule.refs += list(idautils.DataRefsTo(string.ea))
         # almost free
         if pos_name_rules or neg_name_rules:
+            self._progress("Preprocessing names", force=True)
+            n_checked = 0
             for name in idautils.Names():
+                n_checked += 1
+                if (n_checked % 2000) == 0:
+                    self._progress("Preprocessing names", n_checked)
                 va, n = name
                 if not n:
-                    if self.info.debug:
-                        print(f"debug: skipping name at {hex(name)} because it is None")
                     continue
                 for rule in pos_name_rules + neg_name_rules:
                     if rule.matches(n):
                         rule.refs += list(idautils.CodeRefsTo(va, False))
                         rule.refs += list(idautils.DataRefsTo(va))
         # free
+        if pos_byte_rules or neg_byte_rules:
+            self._progress("Compiling byte patterns", force=True)
         for rule in pos_byte_rules + neg_byte_rules:
             rule.patterncompiled = ida_bytes.compiled_binpat_vec_t()
             ida_bytes.parse_binpat_str(rule.patterncompiled, self.info.startva, rule.pattern, 16)
@@ -764,29 +834,35 @@ class MatcherIda:
         # pick a positive rule to cut down initial matches as drastically as possible
 
         if limitto:
+            self._progress("Using refine candidate set", len(limitto), force=True)
             candidatas = limitto
         elif pos_name_rules:
+            self._progress("Initial: name refs", force=True)
             candidatas = self.match_initial_pos_names([pos_name_rules[0]])
             pos_name_rules = pos_name_rules[1:]
         elif pos_fsize_rules:
+            self._progress("Initial: function size", force=True)
             candidatas = self.match_initial_pos_fsize([pos_fsize_rules[0]])
             pos_fsize_rules = pos_fsize_rules[1:]
         elif pos_str_rules:
+            self._progress("Initial: string refs", force=True)
             candidatas = self.match_initial_pos_strings([pos_str_rules[0]])
             pos_str_rules = pos_str_rules[1:]
         elif pos_byte_rules:
+            self._progress("Initial: byte pattern", force=True)
             candidatas = self.match_initial_pos_bytes([pos_byte_rules[0]])
             pos_byte_rules = pos_byte_rules[1:]
         elif pos_imm_rules:
+            self._progress("Initial: immediate", force=True)
             candidatas = self.match_initial_pos_imm([pos_imm_rules[0]])
             pos_imm_rules = pos_imm_rules[1:]
         else:
             # only option is to disasm the full database -> slow
-            print(
-                "It seems only code patterns are available for initial matching, which necessitates disassembling the whole database.")
-            print(
-                "This can be slow. To speed up the process add positiv name > string > function size > bytes > immediate constraints.")
+            print("It seems only code patterns are available for initial matching, which necessitates disassembling the whole database.")
+            print("This can be slow. To speed up the process add positiv name > string > function size > bytes > immediate constraints.")
             candidatas = idautils.Functions()
+
+        self._progress("Mapping candidates to functions", force=True)
 
         # refinement
         # refine against all positive and negative functions
@@ -803,16 +879,10 @@ class MatcherIda:
         if coderules or pos_imm_rules or neg_imm_rules:
             candidatas = self.refine_match_code_and_imm(candidatas, coderules, pos_imm_rules + neg_imm_rules)
 
+        self._progress("Finalizing results", force=True)
         candidatas = list(candidatas)
 
         for c in candidatas:
             c.name = ida_name.get_short_name(c.va)
 
-        # a = b = 0
-        # for c in candidatas:
-        #    a = a + c.end - c.va
-        #    b = b + sum((x[1] - x[0] for x in c.chunks))
-        #    if self.info.debug:
-        #        print(hex(c.va), [(hex(x[0]), hex(x[1])) for x in c.chunks])
-        # print("fsize: ", a, " chunk size: ", b - a)
         return candidatas

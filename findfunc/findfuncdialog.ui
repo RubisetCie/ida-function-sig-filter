@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>FindFunc</string>
+   <string>Filter Signatures</string>
   </property>
   <layout class="QHBoxLayout" name="horizontalLayout_3">
    <item>
@@ -139,7 +139,7 @@
             </sizepolicy>
            </property>
            <property name="text">
-            <string>Find Functions</string>
+            <string>Find functions</string>
            </property>
           </widget>
          </item>
@@ -152,7 +152,7 @@
             </sizepolicy>
            </property>
            <property name="text">
-            <string>Refine Results</string>
+            <string>Refine</string>
            </property>
           </widget>
          </item>
