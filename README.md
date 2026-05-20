@@ -1,5 +1,4 @@
-# FindFunc: Advanced Filtering/Finding of Functions in IDA Pro
-
+# Advanced Filtering/Finding of Functions in IDA Pro
 
 FindFunc is an IDA Pro plugin to find code functions that contain a certain assembly or byte pattern, reference a certain name or string, or conform to various other constraints. 
 
@@ -44,21 +43,16 @@ See "advanced copying" section below for details.
 This feature nicely complements the Byte Pattern rule!
 
 
-
-
 ## Building and Installation
 
 FindFunc is an IDA Pro python plugin without external package dependencies.
 It can be installed by downloading the repository and copying file 'findfuncmain.py' and folder 'findfunc' to your IDA Pro plugin directory.
-For IDA 9.0+ the repository can also be cloned directly into the plugin directory.
+For IDA 9.2+ the repository can also be cloned directly into the plugin directory.
 Either way no building is required.
 
 
-Requirements: IDA Pro 8.x (8.3+) with python3 environment.
+Requirements: IDA Pro 9.2+ with python3 environment.
 FindFunc is designed for x86/x64 architecture only.
-It has been tested with IDA 8.3 - 9.2, python 3.11 on Windows 10 + 11
-
-
 
 
 # Available Rules
@@ -171,9 +165,6 @@ The size of a function includes all of its chunks.
 Note: Function size matching is very fast and ideal to cut down candidates quickly!
 
 
-
-
-
 ## Keyboard Shortcuts & GUI
 
 For ease of use FF can be used via the following keyboard shortcuts:
@@ -208,8 +199,6 @@ Further GUI usage
   * any other column: jump to match of last matched rule
 * Checkbox Profile: Outputs profiling information for the search
 * Checkbox Debug: Dumps detailed debugging output for code rule matching - only use it if few functions make it to the code checking rule, otherwise it might take very long!
-
-
 
 
 ## Advanced Binary Copy
@@ -292,30 +281,3 @@ A brief word on performance:
     However: If no cheap options exist and we have to disassemble large parts of the database anyways (due to presence of code pattern rules), then using one immediate rule as a pre-filter can greatly pay off.
     api-searching ONE immediate is roughly equivalent to 1/8 searching for any number of code-pattern rules - although this also depends on many different factors...
 4. code pattern are the most expensive by far, however checking one pattern vs checking many is very similar.
-
-
-
-
-### Todo (unordered):
-
-* jcc pseudo-mnemonic
-* Allow named locations in CodeRules ('call memset')
-* add rule xref in/out
-* undo/redo
-* progress bar
-* middle-click to close tabs
-* tab menu: close all but this
-* 'ignore all following operands' option
-* Rule for parameters to API calls inside function
-* Rule for parent/callsite/child function requirements
-* Rule for function parameters
-* Regex-rule
-* string/name: casing option
-* automatically convert immediate rules to byte pattern if applicable?
-* settings: case sensitivity, string types, range, ...
-* Hexray rules?
-* OR combination of rules
-* Pythonification of code ;)
-* Parallelization
-* Automatic generation of rules to identify a function?
-
